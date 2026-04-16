@@ -1,0 +1,55 @@
+library(rayshader)
+library(terra)
+library(htmlwidgets)
+library(sf)
+
+tif_path <- "C:/Users/pc/Desktop/input.tif"
+kml_path <- "C:/Users/pc/Desktop/input.kml"
+output_path <- file.path(Sys.getenv("USERPROFILE"), "Downloads", "output.html")
+
+dem_raw <- rast(tif_path)
+dem_small <- aggregate(dem_raw, fact = 2, fun = "mean") 
+
+el_mat <- raster_to_matrix(dem_small)
+
+points_sf <- st_read(kml_path)
+point_coords <- st_coordinates(points_sf)
+
+el_mat %>%
+  sphere_shade(texture = "desert") %>%
+  add_shadow(ray_shade(el_mat, zscale = 10), 0.5) %>%
+  add_shadow(ambient_shade(el_mat), 0) %>%
+  plot_3d(el_mat, zscale = 15, fov = 0, theta = 135, zoom = 0.75, 
+          phi = 45, windowsize = c(1000, 800))
+
+hillshade_texture <- el_mat %>%
+  sphere_shade(texture = "imhof1") %>%
+  add_shadow(ray_shade(el_mat, zscale = 20), 0.5)
+
+plot_3d(hillshade = hillshade_texture, 
+        heightmap = el_mat,     
+        zscale = 20, 
+        fov = 0, 
+        theta = 45, 
+        zoom = 0.6, 
+        phi = 30, 
+        windowsize = c(1200, 800))
+
+coords <- st_coordinates(points_sf)
+
+for(i in 1:nrow(points_sf)) {
+  render_label(heightmap = el_mat, 
+               extent = ext(dem_small), 
+               long = coords[i,1], 
+               lat = coords[i,2],
+               zscale = 20, 
+               text = points_sf$Name[i], 
+               textcolor = "white", 
+               linecolor = "yellow",
+               altitude = 400 + (i * 30), 
+               textsize = 1.2)
+}
+
+library(rgl)
+scene <- rglwidget()
+htmlwidgets::saveWidget(scene, file = output_path)
